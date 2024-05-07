@@ -1,0 +1,90 @@
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.js"></script>
+    <script type="text/javascript">
+        var stompClient = null;
+        var privateStompClient = null;
+
+        // Создаём коннект с определенным веб-сокетом
+        var socket = new SockJS('/ws');
+        // Создаём stomp клиента который будет работать через определенный сокет
+        stompClient = Stomp.over(socket);
+        // Подключаемся
+        stompClient.connect({}, function (frame) {
+            console.log(frame);
+            // Подписываемся на все уведомление которые приходят на все эти сообщения, а потом ничего не делаем
+            stompClient.subscribe('/all/messages', function (result) {
+                // Просто показываем это конкретное сообщение
+                show(JSON.parse(result.body));
+            });
+        });
+
+        socket = new SockJS('/ws');
+        // У нас есть частный клиент stomp который так же устанавливает связь по ws
+        privateStompClient = Stomp.over(socket);
+        privateStompClient.connect({}, function (frame) {
+            console.log(frame);
+            // а за тем подписывается на эту конкретную тему которая называется для конкретного пользователя
+            // теперь должно быть интересно почему это зависит от конкретного пользователя и где мы указали именно этого пользователя
+            // всякий раз когда пользователь входит в систему и подписывается на что-то называемое как /specific спринг автоматически
+            // запускается потому что запрос был отправлен от аутентифицированного клиента так что спринг автоматически распознаёт что
+            // что этот конкретный клиент должен быть связан с определенным пользователем путем идентификатора сеанса
+
+            // откуда берётся идентификатор сеанса? идентификатор сеанса это по сути идентификатор сеанса входа текущего пользователя
+            // в систему. поскольку этот запрос прямо сейчас отправляется от аутентифицированного клиента подписки на самом деле
+            // будут использоваться для подписки на определенного пользователя в идентификаторе сеанса
+            privateStompClient.subscribe('/user/specific', function (result) {
+                console.log(result.body)
+                show(JSON.parse(result.body));
+            });
+        });
+
+
+        // Каждый раз когда нажимаем кнопку сообщения это запускает отправку сообщения в /app/application
+        // Так что по сути пытаемся отправить сообщение всем подключенным клиентам
+        // Таким образом это будет обрабатываться контроллером в MessageController где стоит аннотация
+        // @MessageMapping которое за тем отправит сообщения в /all/messages на который мы подписаны тут же
+        function sendMessage() {
+            var text = document.getElementById('text').value;
+            stompClient.send("/app/application", {},
+                JSON.stringify({'text': text}));
+        }
+
+        function sendPrivateMessage() {
+            var text = document.getElementById('privateText').value;
+            var to = document.getElementById('to').value;
+            stompClient.send("/app/private", {},
+                JSON.stringify({'text': text, 'to': to}));
+        }
+
+        function show(message) {
+            var response = document.getElementById('messages');
+            var p = document.createElement('p');
+            p.innerHTML = "message: " + message.text;
+            response.appendChild(p);
+        }
+    </script>
+</head>
+<body>
+<div>
+    <div>
+        <button id="sendMessage" onclick="sendMessage();">Send</button>
+        <input type="text" id="text" placeholder="Text"/>
+    </div>
+    <br/>
+    <div>
+        <button id="sendPrivateMessage" onclick="sendPrivateMessage();">Send Private</button>
+        <input type="text" id="privateText" placeholder="Private Message"/>
+        <input type="text" id="to" placeholder="To"/>
+    </div>
+    <br/>
+    <br/>
+    <br/>
+
+    <div id="messages"></div>
+
+</div>
+
+</body>
+</html>
